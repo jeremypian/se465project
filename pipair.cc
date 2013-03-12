@@ -1,11 +1,7 @@
-#include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
-
 /*
  * ECE 453/653 SE 465 CS 447/647
  * Demo 1 for Tutorial 2
- * 
+ *
  * This demo is intended to show how to generate call graph using opt from
  * inside your C program. This program spawns "opt" in a separate process via
  * fork(). It captures the call graph from "opt"'s stderr and prints onto
@@ -19,7 +15,17 @@
  *
  * */
 
-enum 
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <map>
+#include <string>
+#include <vector>
+#include <iostream>
+
+using namespace std;
+
+enum
 {
   PIPE_READ = 0,
   PIPE_WRITE,
@@ -34,8 +40,8 @@ int main(int argc, char *argv[]) {
 
   /* arguments */
   char *bc_file;
-  int support;
-  double confidence;
+  int support = 3;
+  double confidence = 0.65;
 
   /* check arguments */
   /* !!!parse arguments yourself!!! */
@@ -52,7 +58,7 @@ int main(int argc, char *argv[]) {
   if (!opt_pid) { /* child process, to spawn opt */
 
     /* close the read end, since opt only write */
-    close(pipe_callgraph[PIPE_READ]);  
+    close(pipe_callgraph[PIPE_READ]);
 
     /* bind pipe to stderr, and check */
     if (dup2(pipe_callgraph[PIPE_WRITE], STDERR_FILENO) < 0) {
@@ -74,7 +80,7 @@ int main(int argc, char *argv[]) {
   }
 
   /* parent process */
-  
+
 
   /* close the write end, since we only read */
   close(pipe_callgraph[PIPE_WRITE]);
@@ -87,8 +93,12 @@ int main(int argc, char *argv[]) {
 
   /* we print w/e read from the pipe */
   char c = '\0';
+  string line = "";
   while (scanf("%c", &c) >= 1) {
-    printf("%c", c);
+    while(c != '\n') {
+        line.append(c);
+    }
+    cout << line;
   }
 
   /* "That's all folks." */
