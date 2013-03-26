@@ -76,7 +76,6 @@ void process_subsets(
         pairs_t_support[callee_pair]++;
     }
   }
-
 }
 
 /* Process the call graph generated from the input call graph file
@@ -150,8 +149,8 @@ int main(int argc, char *argv[]) {
     vector<string> tokens;
     split(line, ' ', tokens);
     if (tokens.size() == 7) {
-      // Line specifies a caller
-      caller = tokens[5];
+      // Line specifies a caller get the name of the caller inside the quotation marks
+      caller = tokens[5].substr(1, tokens[5].find_last_of("'")-1);
       call_graphs[caller] = set<string>();
     }
     else if(tokens.size() == 6) {
@@ -162,7 +161,10 @@ int main(int argc, char *argv[]) {
       // Line specifies a callee
       if (caller == "")
         continue;
-      call_graphs[caller].insert(tokens[3]);
+
+      // find the name of the callee and trim the quotes
+      string callee = tokens[3].substr(1, tokens[3].length()-2);
+      call_graphs[caller].insert(callee);
     }
     else if(tokens.size() == 0) {
       continue;
