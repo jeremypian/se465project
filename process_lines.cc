@@ -60,7 +60,7 @@ void process_subsets(
     if (subset.size() == 1) {
       set<string>::iterator it = subset.begin();
       string callee = *it;
-      cout << "callee:" << callee << " \n";
+      //cout << "callee:" << callee << " \n";
       if (singles_t_support.find(callee) == singles_t_support.end())
         singles_t_support[callee] = 1;
       else
@@ -87,8 +87,6 @@ void process_t_support(map<string, set<string> > call_graphs) {
   map<string, int > singles_t_support;
 
   for (map<string,set<string> >::iterator it=call_graphs.begin(); it!=call_graphs.end(); ++it) {
-    std::cout << it->first << endl;
-
     set<string> callees = it->second;
     vector<set<string> > subsets;
     get_subsets(callees, subsets);

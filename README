@@ -1,1 +1,11 @@
 SE 465 Project
+
+1. g++ process_lines.cc -o exec
+2. ./exec < test_program.cg
+
+This will print the support.
+
+Need a make file.
+Need an efficient way to check under which scope a bug may happens.
+Optimize.
+Integrate with pipair and test on ece linux.
