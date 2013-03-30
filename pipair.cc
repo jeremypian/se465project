@@ -166,12 +166,12 @@ void process_t_support(map<string, set<string> > call_graphs) {
   for (map<string,set<string> >::iterator it=call_graphs.begin(); it!=call_graphs.end(); ++it) {
     set<string> callees = it->second;
 
-    /*
+		/*
     cout << "Caller: " << it->first << " => (";
     for (set<string>::iterator it=callees.begin(); it!=callees.end(); ++it)
       cout << *it << ",";
     cout << ")" << endl;
-    */
+		*/
 
     vector<set<string> > subsets;
     get_subsets(callees, subsets);
@@ -250,45 +250,59 @@ int main(int argc, char *argv[]) {
   }
 
   /* we print w/e read from the pipe */
+	vector<string> file;
   char c = '\0';
   string line = "";
-  string caller = "";
-  map<string, set<string> > call_graphs;
 
   // create a call graph from the .cg file fed through the input
   while (scanf("%c", &c) >= 1) {
-    while(c != '\n') {
+    if(c != '\n') {
         line += c;
     }
-
-    vector<string> tokens;
-    split(line, ' ', tokens);
-    if (tokens.size() == 7) {
-      // Line specifies a caller get the name of the caller inside the quotation marks
-      caller = tokens[5].substr(1, tokens[5].find_last_of("'")-1);
-      call_graphs[caller] = set<string>();
-    }
-    else if(tokens.size() == 6) {
-      // Line specifies the root caller
-      // Do nothing for now
-    }
-    else if(tokens.size() == 4) {
-      // Line specifies a callee
-      if (caller == "")
-        continue;
-
-      string callee;
-      if (tokens[2] == "external")
-        callee = "";
-      else
-        callee = tokens[3].substr(1, tokens[3].length()-2);
-      // find the name of the callee and trim the quotes
-      call_graphs[caller].insert(callee);
-    }
-    else if(tokens.size() == 0) {
-      continue;
-    }
+		else {
+			file.push_back(line);
+			line = "";
+		}
   }
+
+  string caller = "";
+	bool first_line_found = false;
+  map<string, set<string> > call_graphs;
+	for (int i = 0; i<file.size(); i++) {
+		string line = file[i];
+		if (!first_line_found && line.find("Call graph node <<null function>>") == string::npos)
+			continue;
+		else if (!first_line_found && line.find("Call graph node <<null function>>") != string::npos)
+			first_line_found = true;
+
+		vector<string> tokens;
+		split(line, ' ', tokens);
+		if (tokens.size() == 7) {
+			// Line specifies a caller get the name of the caller inside the quotation marks
+			caller = tokens[5].substr(1, tokens[5].find_last_of("'")-1);
+			call_graphs[caller] = set<string>();
+		}
+		else if(tokens.size() == 6) {
+			// Line specifies the root caller
+			// Do nothing for now
+		}
+		else if(tokens.size() == 4) {
+			// Line specifies a callee
+			if (caller == "")
+				continue;
+
+			string callee;
+			if (tokens[2] == "external")
+				callee = "";
+			else
+				callee = tokens[3].substr(1, tokens[3].length()-2);
+			// find the name of the callee and trim the quotes
+			call_graphs[caller].insert(callee);
+		}
+		else if(tokens.size() == 0) {
+			continue;
+		}
+	}
 
   process_t_support(call_graphs);
 
