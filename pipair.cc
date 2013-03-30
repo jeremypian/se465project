@@ -1,20 +1,3 @@
-/*
- * ECE 453/653 SE 465 CS 447/647
- * Demo 1 for Tutorial 2
- *
- * This demo is intended to show how to generate call graph using opt from
- * inside your C program. This program spawns "opt" in a separate process via
- * fork(). It captures the call graph from "opt"'s stderr and prints onto
- * stdin.
- * Run this demo on ecelinux only.
- *
- * Instructions:
- * 1. Compile this program
- * 2. Run this program, pass the path to any valid bitcode file as the first argument
- * 3. Observe the call graph is printed onto stdin
- *
- * */
-
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>

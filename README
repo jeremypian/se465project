@@ -1,11 +1,21 @@
 SE 465 Project
 
-1. g++ process_lines.cc -o exec
-2. ./exec < test_program.cg
+in the ecelinux environment:
+1. g++ pipair.cc -o pipair
+2. ./pipair test_program.bc
 
-This will print the support.
+on dev machine:
+1. g++ process_lines.cc -o pipair
+2. ./pipair < test_program.cg
 
+This will print the bug output;
+
+Things to do:
 Need a make file.
-Need an efficient way to check under which scope a bug may happens.
 Optimize.
-Integrate with pipair and test on ece linux.
+
+In the output, the pair of functions are not sorted by alphabetical order. Need
+to do this.
+
+more tests?
+
