@@ -116,6 +116,13 @@ void find_bugs(
       continue;
 
     split(pair, ',', tokens);
+
+		// Sort the pair alphabetically
+		if (tokens[0].compare(tokens[1]) > 0) {
+			string tmp = tokens[1];
+			tokens[1] = tokens[0];
+			tokens[0] = tmp;
+		}
     for (int i = 0; i<2; i++) {
       int single_t_support = singles_t_support[tokens[i]];
       double confidence = double(pair_t_support) / double(single_t_support);

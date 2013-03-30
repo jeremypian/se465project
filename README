@@ -13,9 +13,5 @@ This will print the bug output;
 Things to do:
 Need a make file.
 Optimize.
-
-In the output, the pair of functions are not sorted by alphabetical order. Need
-to do this.
-
 more tests?
 
