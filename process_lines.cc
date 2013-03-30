@@ -61,6 +61,11 @@ void process_subsets(
       set<string>::iterator it = subset.begin();
       string callee = *it;
       //cout << "callee:" << callee << " \n";
+
+      // continue if the node is an external node
+      if (callee == "")
+        continue;
+
       if (singles_t_support.find(callee) == singles_t_support.end())
         singles_t_support[callee] = 1;
       else
@@ -68,12 +73,56 @@ void process_subsets(
     }
     else if (subset.size() == 2) {
       string callee_pair = "";
-      for (set<string>::iterator it=subset.begin(); it!=subset.end(); ++it)
-        callee_pair.append(*it);
+      set<string>::iterator it=subset.begin();
+      callee_pair.append(*it++);
+      callee_pair.append(",");
+      callee_pair.append(*it);
       if (pairs_t_support.find(callee_pair) == pairs_t_support.end())
         pairs_t_support[callee_pair] = 1;
       else
         pairs_t_support[callee_pair]++;
+    }
+  }
+}
+
+/*
+ * Generate the bug report based on the support of callees
+ */
+void find_bugs(
+  map<string, set<string> > call_graphs,
+  map<string, int > singles_t_support,
+  map<string, int > pairs_t_support
+) {
+  // delete pairs that have a support value that is less than the threshold
+  cout.setf(ios::fixed);
+  cout.precision(2);
+  map<string,int >::iterator it;
+  for (it=pairs_t_support.begin(); it!=pairs_t_support.end(); ++it) {
+    vector<string> tokens;
+    string pair = it->first;
+    int pair_t_support = it->second;
+    if (pair_t_support < T_THRESHOLD)
+      continue;
+
+    split(pair, ',', tokens);
+    for (int i = 0; i<2; i++) {
+      int single_t_support = singles_t_support[tokens[i]];
+      double confidence = double(pair_t_support) / double(single_t_support);
+      //cout << pair_t_support << ", " << single_t_support << endl;
+      if (confidence >= T_CONFIDENCE) {
+        string func_name = "";
+        map<string,set<string> >::iterator it=call_graphs.begin();
+        for (; it!=call_graphs.end(); ++it) {
+          set<string> callees = it->second;
+          if(callees.find(tokens[i]) != callees.end()
+            && callees.find(tokens[1-i]) == callees.end()) {
+            cout << "bug: " << tokens[i] << " in " << it->first << ", "
+            << "pair: (" << tokens[0] << " " << tokens[1] << "), "
+            << "support: " << pair_t_support << ", "
+            << "confidence: " << confidence * 100 << "%" << endl;
+          }
+        }
+      }
     }
   }
 }
@@ -88,38 +137,20 @@ void process_t_support(map<string, set<string> > call_graphs) {
 
   for (map<string,set<string> >::iterator it=call_graphs.begin(); it!=call_graphs.end(); ++it) {
     set<string> callees = it->second;
+
+    /*
+    cout << "Caller: " << it->first << " => (";
+    for (set<string>::iterator it=callees.begin(); it!=callees.end(); ++it)
+      cout << *it << ",";
+    cout << ")" << endl;
+    */
+
     vector<set<string> > subsets;
     get_subsets(callees, subsets);
     process_subsets(subsets, pairs_t_support, singles_t_support);
   }
 
-  // Print potential bug in output
-  map<string,int >::iterator it;
-  vector<string> to_delete;
-  for (it=singles_t_support.begin(); it!=singles_t_support.end(); ++it) {
-    string pair = it->first;
-    int t_support = it->second;
-
-    cout << it->first << ":" << it->second << endl;
-  }
-
-  for (it=pairs_t_support.begin(); it!=pairs_t_support.end(); ++it) {
-    string pair = it->first;
-    int t_support = it->second;
-
-    // delete pairs that have a support value that is less than the threshold
-    if (t_support < T_THRESHOLD)
-      to_delete.push_back(pair);
-  }
-  for (int i = 0; i<to_delete.size(); i++){
-    pairs_t_support.erase(to_delete[i]);
-  }
-
-  for (it=pairs_t_support.begin(); it!=pairs_t_support.end(); ++it) {
-    string pair = it->first;
-    int t_support = it->second;
-    cout << it->first << ":" << it->second << endl;
-  }
+  find_bugs(call_graphs, singles_t_support, pairs_t_support);
 }
 
 /* Test subset func
@@ -160,8 +191,12 @@ int main(int argc, char *argv[]) {
       if (caller == "")
         continue;
 
+      string callee;
+      if (tokens[2] == "external")
+        callee = "";
+      else
+        callee = tokens[3].substr(1, tokens[3].length()-2);
       // find the name of the callee and trim the quotes
-      string callee = tokens[3].substr(1, tokens[3].length()-2);
       call_graphs[caller].insert(callee);
     }
     else if(tokens.size() == 0) {
