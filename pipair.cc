@@ -15,83 +15,63 @@ using namespace std;
 int     T_THRESHOLD   = 3;
 double  T_CONFIDENCE  = 0.65;
 
-enum
-{
-  PIPE_READ = 0,
-  PIPE_WRITE,
-};
+typedef int64_t id;
+
+static map<string, id> string_nodeid_map;
+static map<id, string> reverse_map;
+id get_id_for_string(const string& str) {
+  static id current_count = 0;
+
+  if (string_nodeid_map.count(str)) {
+    return string_nodeid_map[str];
+  }
+
+  string_nodeid_map[str] = current_count;
+  reverse_map[current_count] = str;
+  return current_count++;
+}
+
+string get_string_for_id(id i) {
+  if (reverse_map.count(i)) {
+    return reverse_map[i];  
+  }
+
+  return "";
+}
 
 /* helper that splits string s by a single delimiter delim, and returns the list
  *of tokens in a vector
  */
-void split(const string &s, char delim, vector<string> &elems) {
+void split(const string &s, char delim, vector<string>* elems) {
+  if (!elems) return;
   std::stringstream ss(s);
   std::string item;
+  elems->clear();
   while(std::getline(ss, item, delim)) {
     if (item == " " || item == "")
       continue;
-    elems.push_back(item);
+    elems->push_back(item);
   }
 }
 
-/* helper that computes all subsets of the set callees, and then return the
- * result via the reference vector subsets.
- */
-void get_subsets(set<string> callees, vector<set<string> > &subsets) {
-  if (callees.size() == 1) {
-    subsets.push_back(set<string>());
-    subsets.push_back(callees);
-    return;
-  }
-
-  set<string>::iterator it = callees.begin();
-  string single = *it;
-  callees.erase(single);
-  get_subsets(callees, subsets);
-
-  int subset_size = subsets.size();
-  for (int i = 0; i<subset_size; i++) {
-    set<string> copy(subsets[i]);
-    copy.insert(single);
-    subsets.push_back(copy);
-  }
-}
-
-/* Given the subset subsets of callees, iterate through them and increment the
- * count of T-support for single and pair callees.
- */
-void process_subsets(
-  vector<set<string> > &subsets,
-  map<string, int > &pairs_t_support,
-  map<string, int > &singles_t_support
-)
-{
-  for (int i = 0; i<subsets.size(); i++) {
-    set<string> subset = subsets[i];
-    if (subset.size() == 1) {
-      set<string>::iterator it = subset.begin();
-      string callee = *it;
-      //cout << "callee:" << callee << " \n";
-
-      // continue if the node is an external node
-      if (callee == "")
-        continue;
-
-      if (singles_t_support.find(callee) == singles_t_support.end())
-        singles_t_support[callee] = 1;
-      else
-        singles_t_support[callee]++;
-    }
-    else if (subset.size() == 2) {
-      string callee_pair = "";
-      set<string>::iterator it=subset.begin();
-      callee_pair.append(*it++);
-      callee_pair.append(",");
-      callee_pair.append(*it);
-      if (pairs_t_support.find(callee_pair) == pairs_t_support.end())
-        pairs_t_support[callee_pair] = 1;
-      else
-        pairs_t_support[callee_pair]++;
+void find_bugs_for_id(id i, id other_id, const map<id, set<id> >& call_graphs,
+    double pair_support, double single_support) {
+  float confidence = pair_support / single_support;
+  if (confidence >= T_CONFIDENCE) {
+    map<id, set<id> >::const_iterator it=call_graphs.begin();
+    for (; it!=call_graphs.end(); ++it) {
+      const set<id>& callees = it->second;
+      if(callees.find(i) != callees.end()
+          && callees.find(other_id) == callees.end()) {
+        string first = get_string_for_id(i);
+        string second = get_string_for_id(other_id);
+        cout << "bug: " << first << " in "
+          << get_string_for_id(it->first) << ", "
+          << "pair: (" << min(first, second) << " "
+          << max(first, second)  << "), "
+          << "support: " << (int)pair_support << ", "
+          << "confidence: " << confidence * 100 << "%" << endl;
+      }
     }
   }
 }
@@ -100,48 +80,51 @@ void process_subsets(
  * Generate the bug report based on the support of callees
  */
 void find_bugs(
-  map<string, set<string> > call_graphs,
-  map<string, int > singles_t_support,
-  map<string, int > pairs_t_support
+  const map<id, set<id> >& call_graphs,
+  const map<id, int>& singles_t_support,
+  const map<pair<id, id>, int >& pairs_t_support
 ) {
   // delete pairs that have a support value that is less than the threshold
   cout.setf(ios::fixed);
   cout.precision(2);
-  map<string,int >::iterator it;
-  for (it=pairs_t_support.begin(); it!=pairs_t_support.end(); ++it) {
-    vector<string> tokens;
-    string pair = it->first;
+  for (map<pair<id, id>, int>::const_iterator it = pairs_t_support.begin();
+      it != pairs_t_support.end(); ++it) {
+    pair<id, id> id_pair = it->first;
     int pair_t_support = it->second;
+
     if (pair_t_support < T_THRESHOLD)
       continue;
 
-    split(pair, ',', tokens);
+    //cout << "analyzing bugs for : " << get_string_for_id(id_pair.first) << " " << get_string_for_id(id_pair.second) << endl;
+   
+    map<id, int>::const_iterator first_support = singles_t_support.find(id_pair.first);
+    map<id, int>::const_iterator second_support = singles_t_support.find(id_pair.second);
 
-		// Sort the pair alphabetically
-		if (tokens[0].compare(tokens[1]) > 0) {
-			string tmp = tokens[1];
-			tokens[1] = tokens[0];
-			tokens[0] = tmp;
-		}
-    for (int i = 0; i<2; i++) {
-      int single_t_support = singles_t_support[tokens[i]];
-      double confidence = double(pair_t_support) / double(single_t_support);
-      //cout << pair_t_support << ", " << single_t_support << endl;
-      if (confidence >= T_CONFIDENCE) {
-        string func_name = "";
-        map<string,set<string> >::iterator it=call_graphs.begin();
-        for (; it!=call_graphs.end(); ++it) {
-          set<string> callees = it->second;
-          if(callees.find(tokens[i]) != callees.end()
-            && callees.find(tokens[1-i]) == callees.end()) {
-            cout << "bug: " << tokens[i] << " in " << it->first << ", "
-            << "pair: (" << tokens[0] << " " << tokens[1] << "), "
-            << "support: " << pair_t_support << ", "
-            << "confidence: " << confidence * 100 << "%" << endl;
-          }
-        }
+    if (first_support == singles_t_support.end() ||
+        second_support == singles_t_support.end()) {
+      continue;
+    }
+    
+    find_bugs_for_id(id_pair.first, id_pair.second, call_graphs, pair_t_support,
+        first_support->second);
+    find_bugs_for_id(id_pair.second, id_pair.first, call_graphs, pair_t_support,
+        second_support->second);
+  }
+}
+
+void update_pair_support(const set<id>& ids, map<pair<id, id>, int>& support) {
+  for (set<id>::const_iterator i = ids.begin(); i != ids.end(); i++) {
+    for (set<id>::const_iterator j = i; j != ids.end(); j++) {
+      if (*i < *j) {
+        support[pair<id, id>(*i, *j)] += 1;
       }
     }
+  }
+}
+
+void update_single_support(const set<id>& ids, map<id, int>& support) {
+  for (set<id>::const_iterator i = ids.begin(); i != ids.end(); i++) {
+    support[*i] += 1;
   }
 }
 
@@ -149,28 +132,82 @@ void find_bugs(
  * Args:
  *   call_graphs - a map of callers to their respective callees
  */
-void process_t_support(map<string, set<string> > call_graphs) {
-  map<string, int > pairs_t_support;
-  map<string, int > singles_t_support;
 
-  for (map<string,set<string> >::iterator it=call_graphs.begin(); it!=call_graphs.end(); ++it) {
-    set<string> callees = it->second;
+void process_t_support(const map<id, set<id> >& call_graphs) {
+  map<pair<id, id>, int > pairs_t_support;
+  map<id, int > singles_t_support;
 
-		/*
-    cout << "Caller: " << it->first << " => (";
-    for (set<string>::iterator it=callees.begin(); it!=callees.end(); ++it)
-      cout << *it << ",";
-    cout << ")" << endl;
-		*/
+  for (map<id, set<id> >::const_iterator it=call_graphs.begin(); it!=call_graphs.end(); ++it) {
 
-    vector<set<string> > subsets;
-    get_subsets(callees, subsets);
-    process_subsets(subsets, pairs_t_support, singles_t_support);
+    const set<id>& callees = it->second;
+    /*cout << "Caller: " << get_string_for_id(it->first) << " => (";
+    for (set<id>::const_iterator it=callees.begin(); it!=callees.end(); ++it)
+      cout << get_string_for_id(*it) << "(" << *it << ")"<< ",";
+    cout << ")" << endl;*/
+
+    // update total counts for pair and single support
+    update_pair_support(callees, pairs_t_support);
+    update_single_support(callees, singles_t_support);
   }
 
   find_bugs(call_graphs, singles_t_support, pairs_t_support);
 }
+
+inline bool is_null_caller(const string& line) {
+  static const string null_function_node = "Call graph node <<null function>>";
+  return line.find(null_function_node) != string::npos;
+}
+
+/**
+ * Detects bugs in program by inferring likely invariants.
+ */
+void detect_bugs_in_callgraph(const vector<string>& file) {
+
+  map<id, set<id> > call_graphs;
+
+  // get rid of preceding text
+  vector<string>::const_iterator line_itr = file.begin();
+  string caller = "";
+  while (line_itr != file.end() && is_null_caller(*line_itr)) line_itr++;
+
+  for (;line_itr != file.end(); line_itr++) {
+    string line = *line_itr;
+
+    if (is_null_caller(line)) {
+      caller = "";
+    }
+
+    vector<string> tokens;
+    split(line, ' ', &tokens);
+    if (tokens.size() == 7) {
+      // Line specifies a caller get the name of the caller inside the quotation marks
+      caller = tokens[5].substr(1, tokens[5].find_last_of("'")-1);
+    } else if(tokens.size() == 4) {
+      // Line specifies a callee
+      
+      // Don't extract callee for null
+      if (caller == "")
+        continue;
+
+      if (tokens[2] == "external")
+        continue;
+        
+      string callee = tokens[3].substr(1, tokens[3].length()-2);
+      // find the name of the callee and trim the quotes
+      call_graphs[get_id_for_string(caller)].insert(get_id_for_string(callee));
+    }
+  }
+
+  process_t_support(call_graphs);
+}
+
+enum {
+  PIPE_READ = 0,
+  PIPE_WRITE,
+};
+
 int main(int argc, char *argv[]) {
+
   /* pipe to connect opt's stderr and our stdin */
   int pipe_callgraph[2];
 
@@ -181,18 +218,16 @@ int main(int argc, char *argv[]) {
   char *bc_file;
 
   /* check arguments */
-  if (argc == 2) {
-    bc_file = argv[1];
+  if (argc != 2 && argc != 4) {
+    exit(0);
   }
-  else if (argc == 4) {
+
+  bc_file = argv[1];
+
+  if (argc == 4) {
     T_THRESHOLD = atoi(argv[2]);
     T_CONFIDENCE = atof(argv[3]) / 100.0;
     assert(T_CONFIDENCE <= 1.0);
-    cout << T_THRESHOLD << endl;
-    cout << T_CONFIDENCE << endl;
-  }
-  else {
-    exit(0);
   }
 
   /* create pipe and check if pipe succeeded */
@@ -217,6 +252,9 @@ int main(int argc, char *argv[]) {
     /* print something to stderr */
     fprintf(stderr, "This is child, just before spawning opt with %s.\n", bc_file);
 
+    /* close stdout so we don't print the binary */
+    close(STDOUT_FILENO);
+
     /* spawn opt */
     if (execl("/usr/local/bin/opt", "opt", "-print-callgraph", bc_file, (char *)NULL) < 0) {
       perror("execl opt");
@@ -229,7 +267,6 @@ int main(int argc, char *argv[]) {
 
   /* parent process */
 
-
   /* close the write end, since we only read */
   close(pipe_callgraph[PIPE_WRITE]);
 
@@ -241,60 +278,13 @@ int main(int argc, char *argv[]) {
 
   /* we print w/e read from the pipe */
 	vector<string> file;
-  char c = '\0';
   string line = "";
 
   // create a call graph from the .cg file fed through the input
-  while (scanf("%c", &c) >= 1) {
-    if(c != '\n') {
-        line += c;
-    }
-		else {
-			file.push_back(line);
-			line = "";
-		}
+  while (getline(cin, line)) {
+    file.push_back(line);
   }
-
-  string caller = "";
-	bool first_line_found = false;
-  map<string, set<string> > call_graphs;
-	for (int i = 0; i<file.size(); i++) {
-		string line = file[i];
-		if (!first_line_found && line.find("Call graph node <<null function>>") == string::npos)
-			continue;
-		else if (!first_line_found && line.find("Call graph node <<null function>>") != string::npos)
-			first_line_found = true;
-
-		vector<string> tokens;
-		split(line, ' ', tokens);
-		if (tokens.size() == 7) {
-			// Line specifies a caller get the name of the caller inside the quotation marks
-			caller = tokens[5].substr(1, tokens[5].find_last_of("'")-1);
-			call_graphs[caller] = set<string>();
-		}
-		else if(tokens.size() == 6) {
-			// Line specifies the root caller
-			// Do nothing for now
-		}
-		else if(tokens.size() == 4) {
-			// Line specifies a callee
-			if (caller == "")
-				continue;
-
-			string callee;
-			if (tokens[2] == "external")
-				callee = "";
-			else
-				callee = tokens[3].substr(1, tokens[3].length()-2);
-			// find the name of the callee and trim the quotes
-			call_graphs[caller].insert(callee);
-		}
-		else if(tokens.size() == 0) {
-			continue;
-		}
-	}
-
-  process_t_support(call_graphs);
+  detect_bugs_in_callgraph(file);
 
   /* "That's all folks." */
   return 0;
