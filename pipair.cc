@@ -33,26 +33,26 @@ id get_id_for_string(const string& str) {
   return current_count++;
 }
 
-string get_string_for_id(id i) {
+string& get_string_for_id(id i) {
+  static string empty = "";
   if (reverse_map.count(i)) {
     return reverse_map[i];  
   }
 
-  return "";
+  return empty;
 }
 
 /* helper that splits string s by a single delimiter delim, and returns the list
  *of tokens in a vector
  */
-void split(const string &s, char delim, vector<string>* elems) {
-  if (!elems) return;
+void split(const string &s, char delim, vector<string>& elems) {
   std::stringstream ss(s);
   std::string item;
-  elems->clear();
+  elems.clear();
   while(std::getline(ss, item, delim)) {
     if (item == " " || item == "")
       continue;
-    elems->push_back(item);
+    elems.push_back(item);
   }
 }
 
@@ -173,12 +173,13 @@ void process_t_support(const map<id, set<id> >& call_graphs) {
   for (map<id, set<id> >::const_iterator it=call_graphs.begin(); it!=call_graphs.end(); ++it) {
 
     // update total counts for pair and single support
-    set<id> callees = expand_callees(it->first, call_graphs, T_DEPTH, false); 
+    const set<id> callees = T_DEPTH > 1 ? expand_callees(it->first, call_graphs, T_DEPTH, false) :
+      it->second;
 
-    cout << "Caller: " << get_string_for_id(it->first) << " => (";
+    /*cout << "Caller: " << get_string_for_id(it->first) << " => (";
     for (set<id>::const_iterator it=callees.begin(); it!=callees.end(); ++it)
       cout << get_string_for_id(*it) << "(" << *it << ")"<< ",";
-    cout << ")" << endl;
+    cout << ")" << endl;*/
 
     update_pair_support(callees, pairs_t_support);
     update_single_support(callees, singles_t_support);
@@ -214,7 +215,7 @@ void detect_bugs_in_callgraph(const vector<string>& file) {
     }
 
     vector<string> tokens;
-    split(line, ' ', &tokens);
+    split(line, ' ', tokens);
     if (tokens.size() == 7) {
       // Line specifies a caller get the name of the caller inside the quotation marks
       caller = tokens[5].substr(1, tokens[5].find_last_of("'")-1);
