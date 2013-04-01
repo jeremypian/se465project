@@ -17,6 +17,8 @@ int     T_THRESHOLD   = 3;
 double  T_CONFIDENCE  = 0.65;
 int T_DEPTH = 1;
 
+// Keep a map of id --> string so main datastructures work with
+// ids instead of full strings for better performance
 typedef int64_t id;
 
 static map<string, id> string_nodeid_map;
@@ -42,8 +44,9 @@ string& get_string_for_id(id i) {
   return empty;
 }
 
-/* helper that splits string s by a single delimiter delim, and returns the list
- *of tokens in a vector
+/**
+ * Helper that splits string s by a single delimiter delim, and returns the list
+ * of tokens in a vector.
  */
 void split(const string &s, char delim, vector<string>& elems) {
   std::stringstream ss(s);
@@ -56,16 +59,21 @@ void split(const string &s, char delim, vector<string>& elems) {
   }
 }
 
-void find_bugs_for_id(id i, id other_id, const map<id, set<id> >& call_graphs,
+/**
+ * Finds potential bugs in the call for the given pair of ids and the support values
+ * for the pair and the single ids.
+ */
+
+void find_bugs_for_pair(id primary_id, id other_id, const map<id, set<id> >& call_graphs,
     double pair_support, double single_support) {
   float confidence = pair_support / single_support;
   if (confidence >= T_CONFIDENCE) {
-    map<id, set<id> >::const_iterator it=call_graphs.begin();
+    map<id, set<id> >::const_iterator it = call_graphs.begin();
     for (; it!=call_graphs.end(); ++it) {
       const set<id>& callees = it->second;
-      if(callees.find(i) != callees.end()
+      if(callees.find(primary_id) != callees.end()
           && callees.find(other_id) == callees.end()) {
-        string first = get_string_for_id(i);
+        string first = get_string_for_id(primary_id);
         string second = get_string_for_id(other_id);
         cout << "bug: " << first << " in "
           << get_string_for_id(it->first) << ", "
@@ -79,7 +87,8 @@ void find_bugs_for_id(id i, id other_id, const map<id, set<id> >& call_graphs,
 }
 
 /*
- * Generate the bug report based on the support of callees
+ * Find bugs given the program call_graphs, the single node support singles_t_support
+ * and the pair node support pairs_t_support.
  */
 void find_bugs(
   const map<id, set<id> >& call_graphs,
@@ -89,6 +98,9 @@ void find_bugs(
   // delete pairs that have a support value that is less than the threshold
   cout.setf(ios::fixed);
   cout.precision(2);
+
+  // Iterate through each pair and try and find bugs for pairs where the support
+  // is larger than the provided threshold.
   for (map<pair<id, id>, int>::const_iterator it = pairs_t_support.begin();
       it != pairs_t_support.end(); ++it) {
     pair<id, id> id_pair = it->first;
@@ -96,8 +108,6 @@ void find_bugs(
 
     if (pair_t_support < T_THRESHOLD)
       continue;
-
-    //cout << "analyzing bugs for : " << get_string_for_id(id_pair.first) << " " << get_string_for_id(id_pair.second) << endl;
    
     map<id, int>::const_iterator first_support = singles_t_support.find(id_pair.first);
     map<id, int>::const_iterator second_support = singles_t_support.find(id_pair.second);
@@ -114,6 +124,9 @@ void find_bugs(
   }
 }
 
+/**
+ * Add this set of ids to the support of all pairs.
+ */
 void update_pair_support(const set<id>& ids, map<pair<id, id>, int>& support) {
   for (set<id>::const_iterator i = ids.begin(); i != ids.end(); i++) {
     for (set<id>::const_iterator j = i; j != ids.end(); j++) {
@@ -124,12 +137,18 @@ void update_pair_support(const set<id>& ids, map<pair<id, id>, int>& support) {
   }
 }
 
+/**
+ * Add this set of ids to the support of all singles.
+ */
 void update_single_support(const set<id>& ids, map<id, int>& support) {
   for (set<id>::const_iterator i = ids.begin(); i != ids.end(); i++) {
     support[*i] += 1;
   }
 }
 
+/**
+ * Expand the nodes for inter-procedure analysis.
+ */
 set<id>& expand_callees_helper(id target, const map<id, set<id> >& call_graphs, int depth, bool keep_expanded, map<id, set<id> >& caller_callees_map) {
   
   if (caller_callees_map.count(target)) {
@@ -162,9 +181,8 @@ set<id> expand_callees(id target, const map<id, set<id> >& call_graphs, int dept
       caller_callees_map);
 }
 
-/* Process the call graph generated from the input call graph file
- * Args:
- *   call_graphs - a map of callers to their respective callees
+/**
+ * Process the call graph generated from the input call graph file and verify it for bugs.
  */
 void process_t_support(const map<id, set<id> >& call_graphs) {
   map<pair<id, id>, int > pairs_t_support;
@@ -184,8 +202,6 @@ void process_t_support(const map<id, set<id> >& call_graphs) {
     update_pair_support(callees, pairs_t_support);
     update_single_support(callees, singles_t_support);
   }
-
-  // generate pair support based on depth
 
   find_bugs(call_graphs, singles_t_support, pairs_t_support);
 }
