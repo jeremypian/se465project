@@ -6,6 +6,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <algorithm>
 #include <iostream>
 #include <assert.h>
 
@@ -14,6 +15,7 @@ using namespace std;
 // May be set via commandline
 int     T_THRESHOLD   = 3;
 double  T_CONFIDENCE  = 0.65;
+int T_DEPTH = 1;
 
 typedef int64_t id;
 
@@ -128,27 +130,61 @@ void update_single_support(const set<id>& ids, map<id, int>& support) {
   }
 }
 
+set<id>& expand_callees_helper(id target, const map<id, set<id> >& call_graphs, int depth, bool keep_expanded, map<id, set<id> >& caller_callees_map) {
+  
+  if (caller_callees_map.count(target)) {
+    return caller_callees_map[target];
+  }
+
+  map<id, set<id> >::const_iterator child_itr = call_graphs.find(target);
+  const set<id>& children = child_itr->second;
+  if (depth == 0 || children.size() == 0) {
+    caller_callees_map[target].insert(target);
+  } else {
+    // get set union of all children
+    if (keep_expanded) {
+      caller_callees_map[target].insert(children.begin(), children.end());
+    }
+    for (set<id>::const_iterator i = children.begin(); i != children.end(); i++) {
+      set<id>& children_callees = expand_callees_helper(*i, call_graphs, depth - 1,
+          keep_expanded, caller_callees_map);
+      caller_callees_map[target].insert(children_callees.begin(), children_callees.end());
+    }
+  }
+
+  return caller_callees_map[target];
+}
+
+set<id> expand_callees(id target, const map<id, set<id> >& call_graphs, int depth,
+    bool keep_expanded) {
+  map<id, set<id> > caller_callees_map;
+  return expand_callees_helper(target, call_graphs, depth, keep_expanded,
+      caller_callees_map);
+}
+
 /* Process the call graph generated from the input call graph file
  * Args:
  *   call_graphs - a map of callers to their respective callees
  */
-
 void process_t_support(const map<id, set<id> >& call_graphs) {
   map<pair<id, id>, int > pairs_t_support;
   map<id, int > singles_t_support;
 
   for (map<id, set<id> >::const_iterator it=call_graphs.begin(); it!=call_graphs.end(); ++it) {
 
-    const set<id>& callees = it->second;
-    /*cout << "Caller: " << get_string_for_id(it->first) << " => (";
+    // update total counts for pair and single support
+    set<id> callees = expand_callees(it->first, call_graphs, T_DEPTH, false); 
+
+    cout << "Caller: " << get_string_for_id(it->first) << " => (";
     for (set<id>::const_iterator it=callees.begin(); it!=callees.end(); ++it)
       cout << get_string_for_id(*it) << "(" << *it << ")"<< ",";
-    cout << ")" << endl;*/
+    cout << ")" << endl;
 
-    // update total counts for pair and single support
     update_pair_support(callees, pairs_t_support);
     update_single_support(callees, singles_t_support);
   }
+
+  // generate pair support based on depth
 
   find_bugs(call_graphs, singles_t_support, pairs_t_support);
 }
@@ -218,16 +254,20 @@ int main(int argc, char *argv[]) {
   char *bc_file;
 
   /* check arguments */
-  if (argc != 2 && argc != 4) {
+  if (argc != 2 && argc != 4 && argc != 5) {
     exit(0);
   }
 
   bc_file = argv[1];
 
-  if (argc == 4) {
+  if (argc >= 4) {
     T_THRESHOLD = atoi(argv[2]);
     T_CONFIDENCE = atof(argv[3]) / 100.0;
     assert(T_CONFIDENCE <= 1.0);
+  }
+
+  if (argc == 5) {
+    T_DEPTH = atoi(argv[4]); 
   }
 
   /* create pipe and check if pipe succeeded */
