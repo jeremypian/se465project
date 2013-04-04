@@ -117,9 +117,9 @@ void find_bugs(
       continue;
     }
     
-    find_bugs_for_id(id_pair.first, id_pair.second, call_graphs, pair_t_support,
+    find_bugs_for_pair(id_pair.first, id_pair.second, call_graphs, pair_t_support,
         first_support->second);
-    find_bugs_for_id(id_pair.second, id_pair.first, call_graphs, pair_t_support,
+    find_bugs_for_pair(id_pair.second, id_pair.first, call_graphs, pair_t_support,
         second_support->second);
   }
 }
