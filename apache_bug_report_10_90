@@ -1,0 +1,6 @@
+bug: apr_thread_mutex_lock in apr_dbd_mutex_lock, pair: (apr_thread_mutex_lock apr_thread_mutex_unlock), support: 43, confidence: 95.56%
+bug: apr_thread_mutex_lock in apu_dso_mutex_lock, pair: (apr_thread_mutex_lock apr_thread_mutex_unlock), support: 43, confidence: 95.56%
+bug: apr_thread_mutex_unlock in apr_dbd_mutex_unlock, pair: (apr_thread_mutex_lock apr_thread_mutex_unlock), support: 43, confidence: 91.49%
+bug: apr_thread_mutex_unlock in apu_dso_mutex_unlock, pair: (apr_thread_mutex_lock apr_thread_mutex_unlock), support: 43, confidence: 91.49%
+bug: apr_thread_mutex_unlock in apr_global_mutex_trylock, pair: (apr_thread_mutex_lock apr_thread_mutex_unlock), support: 43, confidence: 91.49%
+bug: apr_thread_mutex_unlock in apr_global_mutex_unlock, pair: (apr_thread_mutex_lock apr_thread_mutex_unlock), support: 43, confidence: 91.49%
