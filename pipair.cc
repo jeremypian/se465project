@@ -65,12 +65,12 @@ void split(const string &s, char delim, vector<string>& elems) {
  */
 
 void find_bugs_for_pair(id primary_id, id other_id, const map<id, set<id> >& call_graphs,
-    double pair_support, double single_support) {
+    const map<id, set<id> >& id_callees_map, double pair_support, double single_support) {
   float confidence = pair_support / single_support;
   if (confidence >= T_CONFIDENCE) {
     map<id, set<id> >::const_iterator it = call_graphs.begin();
     for (; it!=call_graphs.end(); ++it) {
-      const set<id>& callees = it->second;
+      const set<id>& callees = id_callees_map.find(it->first)->second;
       if(callees.find(primary_id) != callees.end()
           && callees.find(other_id) == callees.end()) {
         string first = get_string_for_id(primary_id);
@@ -92,6 +92,7 @@ void find_bugs_for_pair(id primary_id, id other_id, const map<id, set<id> >& cal
  */
 void find_bugs(
   const map<id, set<id> >& call_graphs,
+  const map<id, set<id> >& id_callees_map,
   const map<id, int>& singles_t_support,
   const map<pair<id, id>, int >& pairs_t_support
 ) {
@@ -117,9 +118,9 @@ void find_bugs(
       continue;
     }
     
-    find_bugs_for_pair(id_pair.first, id_pair.second, call_graphs, pair_t_support,
+    find_bugs_for_pair(id_pair.first, id_pair.second, call_graphs, id_callees_map, pair_t_support,
         first_support->second);
-    find_bugs_for_pair(id_pair.second, id_pair.first, call_graphs, pair_t_support,
+    find_bugs_for_pair(id_pair.second, id_pair.first, call_graphs, id_callees_map, pair_t_support,
         second_support->second);
   }
 }
@@ -147,7 +148,17 @@ void update_single_support(const set<id>& ids, map<id, int>& support) {
 }
 
 /**
+ * PART 1 c)
+ *
  * Expand the nodes for inter-procedure analysis.
+ * This function expands each node's callee set by running through the callgraph T_DEPTH
+ * levels lower than the provided node `target` position in the call graph.
+ *
+ * This method returns a set of all nodes that are executed T_DEPTH levels below the
+ * `target` node.
+ *
+ * Note the `keep_expanded` parameter, which tells the program wether or not to keep
+ * the node that was expanded instead of discarding it.
  */
 set<id>& expand_callees_helper(id target, const map<id, set<id> >& call_graphs, int depth, bool keep_expanded, map<id, set<id> >& caller_callees_map) {
   
@@ -160,7 +171,7 @@ set<id>& expand_callees_helper(id target, const map<id, set<id> >& call_graphs, 
   if (depth == 0 || children.size() == 0) {
     caller_callees_map[target].insert(target);
   } else {
-    // get set union of all children
+    // Get set union of all children
     if (keep_expanded) {
       caller_callees_map[target].insert(children.begin(), children.end());
     }
@@ -174,6 +185,10 @@ set<id>& expand_callees_helper(id target, const map<id, set<id> >& call_graphs, 
   return caller_callees_map[target];
 }
 
+/**
+ * Provides a map that can be used for memoization when expanding callees.  This
+ * helps performance by caching already expanded nodes in the same traversal.
+ */
 set<id> expand_callees(id target, const map<id, set<id> >& call_graphs, int depth,
     bool keep_expanded) {
   map<id, set<id> > caller_callees_map;
@@ -187,23 +202,20 @@ set<id> expand_callees(id target, const map<id, set<id> >& call_graphs, int dept
 void process_t_support(const map<id, set<id> >& call_graphs) {
   map<pair<id, id>, int > pairs_t_support;
   map<id, int > singles_t_support;
+  map<id, set<id> > id_callees_map;
 
   for (map<id, set<id> >::const_iterator it=call_graphs.begin(); it!=call_graphs.end(); ++it) {
 
     // update total counts for pair and single support
-    const set<id> callees = T_DEPTH > 1 ? expand_callees(it->first, call_graphs, T_DEPTH, false) :
+    set<id> callees = T_DEPTH > 1 ? expand_callees(it->first, call_graphs, T_DEPTH, false) :
       it->second;
-
-    /*cout << "Caller: " << get_string_for_id(it->first) << " => (";
-    for (set<id>::const_iterator it=callees.begin(); it!=callees.end(); ++it)
-      cout << get_string_for_id(*it) << "(" << *it << ")"<< ",";
-    cout << ")" << endl;*/
 
     update_pair_support(callees, pairs_t_support);
     update_single_support(callees, singles_t_support);
+    id_callees_map[it->first] = callees;
   }
 
-  find_bugs(call_graphs, singles_t_support, pairs_t_support);
+  find_bugs(call_graphs, id_callees_map, singles_t_support, pairs_t_support);
 }
 
 inline bool is_null_caller(const string& line) {
